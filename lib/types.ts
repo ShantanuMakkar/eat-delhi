@@ -2,6 +2,7 @@ export type Place = {
   id: string;
   name: string;
   region: string;
+  neighbourhood: string;
   cuisine: string[];
   vibe: string[];
   price: number;
@@ -15,4 +16,5 @@ export type Place = {
   lat: number;
   lng: number;
   photo?: string;
+  mustTry?: boolean;
 };
