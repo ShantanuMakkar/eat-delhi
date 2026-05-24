@@ -1,17 +1,37 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { PLACES } from '../../lib/places';
-import type { Place } from '../../lib/types';
+
+const REGION_COORDS: Record<string, { lat: number; lng: number; radius: number }> = {
+  cp:           { lat: 28.6315, lng: 77.2167, radius: 2000 },
+  south:        { lat: 28.5245, lng: 77.1855, radius: 5000 },
+  north:        { lat: 28.7041, lng: 77.1025, radius: 5000 },
+  central:      { lat: 28.6268, lng: 77.2311, radius: 3000 },
+  chanakyapuri: { lat: 28.5994, lng: 77.1753, radius: 2500 },
+  majnu:        { lat: 28.7196, lng: 77.2309, radius: 1000 },
+  hauz:         { lat: 28.5494, lng: 77.2001, radius: 2000 },
+  lajpat:       { lat: 28.5677, lng: 77.2434, radius: 2000 },
+  saket:        { lat: 28.5245, lng: 77.2066, radius: 2000 },
+  olddelhi:     { lat: 28.6507, lng: 77.2334, radius: 2000 },
+  nehru:        { lat: 28.5653, lng: 77.2373, radius: 2500 },
+  all:          { lat: 28.6139, lng: 77.2090, radius: 15000 },
+};
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<Place[]>
+  res: NextApiResponse
 ) {
-  // ── If no Google API key, return curated data (works out of the box) ──
+  const region = (req.query.region as string) ?? 'all';
+
+  // No API key — return curated fallback data
   if (!process.env.GOOGLE_PLACES_KEY) {
-    return res.status(200).json(PLACES);
+    const data = region === 'all'
+      ? PLACES
+      : PLACES.filter((p) => p.region === region);
+    return res.status(200).json(data);
   }
 
-  // ── Otherwise fetch live data from Google Places ──
+  const coords = REGION_COORDS[region] ?? REGION_COORDS['all'];
+
   try {
     const response = await fetch(
       'https://places.googleapis.com/v1/places:searchNearby',
@@ -28,16 +48,19 @@ export default async function handler(
             'places.photos',
             'places.regularOpeningHours',
             'places.priceLevel',
+            'places.location',
+            'places.primaryTypeDisplayName',
+            'places.editorialSummary',
           ].join(','),
         },
         body: JSON.stringify({
           locationRestriction: {
             circle: {
-              center: { latitude: 28.6139, longitude: 77.2090 },
-              radius: 8000,
+              center: { latitude: coords.lat, longitude: coords.lng },
+              radius: coords.radius,
             },
           },
-          includedTypes: ['restaurant', 'cafe'],
+          includedTypes: ['restaurant', 'cafe', 'meal_takeaway'],
           rankPreference: 'POPULARITY',
           maxResultCount: 20,
         }),
@@ -46,12 +69,15 @@ export default async function handler(
 
     const data = await response.json();
 
-    // Cache response for 24 hours on the CDN
+    if (!data.places) {
+      console.error('Google Places API returned no places:', data);
+      return res.status(200).json(PLACES);
+    }
+
     res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate');
-    return res.status(200).json(data.places ?? PLACES);
+    return res.status(200).json(data.places);
   } catch (err) {
-    console.error('Google Places API error:', err);
-    // Graceful fallback to curated data on any error
+    console.error('Google Places fetch error:', err);
     return res.status(200).json(PLACES);
   }
 }
