@@ -1,5 +1,5 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { PLACES } from '../../lib/places';
+import type { NextApiRequest, NextApiResponse } from 'next'
+import { PLACES } from '../../lib/places'
 
 const REGION_COORDS: Record<string, { lat: number; lng: number; radius: number }> = {
   cp:           { lat: 28.6315, lng: 77.2167, radius: 2000 },
@@ -14,26 +14,23 @@ const REGION_COORDS: Record<string, { lat: number; lng: number; radius: number }
   olddelhi:     { lat: 28.6507, lng: 77.2334, radius: 2000 },
   nehru:        { lat: 28.5653, lng: 77.2373, radius: 2500 },
   all:          { lat: 28.6139, lng: 77.2090, radius: 15000 },
-};
+}
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  const region = (req.query.region as string) ?? 'all';
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const region = typeof req.query.region === 'string' ? req.query.region : 'all'
 
-  // No API key — return curated fallback data
+  // No API key — return curated fallback
   if (!process.env.GOOGLE_PLACES_KEY) {
     const data = region === 'all'
       ? PLACES
-      : PLACES.filter((p) => p.region === region);
-    return res.status(200).json(data);
+      : PLACES.filter((p) => p.region === region)
+    return res.status(200).json(data)
   }
 
-  const coords = REGION_COORDS[region] ?? REGION_COORDS['all'];
+  const coords = REGION_COORDS[region] ?? REGION_COORDS['all']
 
   try {
-    const response = await fetch(
+    const googleRes = await fetch(
       'https://places.googleapis.com/v1/places:searchNearby',
       {
         method: 'POST',
@@ -49,6 +46,7 @@ export default async function handler(
             'places.regularOpeningHours',
             'places.priceLevel',
             'places.location',
+            'places.formattedAddress',
             'places.primaryTypeDisplayName',
             'places.editorialSummary',
           ].join(','),
@@ -65,19 +63,26 @@ export default async function handler(
           maxResultCount: 20,
         }),
       }
-    );
+    )
 
-    const data = await response.json();
+    const data = await googleRes.json()
 
     if (!data.places) {
-      console.error('Google Places API returned no places:', data);
-      return res.status(200).json(PLACES);
+      console.error('Google Places error:', JSON.stringify(data))
+      // Graceful fallback
+      const fallback = region === 'all'
+        ? PLACES
+        : PLACES.filter((p) => p.region === region)
+      return res.status(200).json(fallback)
     }
 
-    res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate');
-    return res.status(200).json(data.places);
+    res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate')
+    return res.status(200).json(data.places)
   } catch (err) {
-    console.error('Google Places fetch error:', err);
-    return res.status(200).json(PLACES);
+    console.error('Google Places fetch error:', err)
+    const fallback = region === 'all'
+      ? PLACES
+      : PLACES.filter((p) => p.region === region)
+    return res.status(200).json(fallback)
   }
 }
