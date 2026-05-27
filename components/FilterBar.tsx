@@ -1,12 +1,12 @@
 'use client'
-import type { ActiveFilters } from '@/lib/types'
+import type { ActiveFilters, SortOption } from '@/lib/types'
 
 type Props = {
-  filters: ActiveFilters
-  onChange: (f: ActiveFilters) => void
+  filters:      ActiveFilters
+  onChange:     (f: ActiveFilters) => void
   totalVisible: number
-  totalAll: number
-  loading?: boolean
+  totalAll:     number
+  loading?:     boolean
 }
 
 const REGIONS = [
@@ -40,6 +40,13 @@ const VIBES = [
   { key: 'artsy',      label: 'Artsy' },
 ]
 
+const PRICES = [
+  { value: 1, label: '₹' },
+  { value: 2, label: '₹₹' },
+  { value: 3, label: '₹₹₹' },
+  { value: 4, label: '₹₹₹₹' },
+]
+
 const RATINGS = [
   { value: 0,   label: 'All' },
   { value: 4.5, label: '4.5+ ⭐' },
@@ -47,17 +54,22 @@ const RATINGS = [
   { value: 3.5, label: '3.5+ ⭐' },
 ]
 
-function toggle(arr: string[], key: string): string[] {
-  return arr.includes(key) ? arr.filter(k => k !== key) : [...arr, key]
+const SORTS: { value: SortOption; label: string }[] = [
+  { value: 'rating',     label: '★ Rating' },
+  { value: 'reviews',    label: '💬 Most reviewed' },
+  { value: 'price_asc',  label: '₹ Price: low → high' },
+  { value: 'price_desc', label: '₹ Price: high → low' },
+]
+
+function toggleArr<T>(arr: T[], val: T): T[] {
+  return arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val]
 }
 
+// Base pill used for most filters
 function Pill({
   label, active, onClick, accent,
 }: {
-  label: string
-  active: boolean
-  onClick: () => void
-  accent?: string
+  label: string; active: boolean; onClick: () => void; accent?: string
 }) {
   return (
     <button
@@ -79,69 +91,124 @@ function Pill({
   )
 }
 
+// Section label
+function Label({ children, aside }: { children: string; aside?: string }) {
+  return (
+    <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-400
+                  dark:text-neutral-500 font-medium mb-2">
+      {children}
+      {aside && <span className="ml-2 normal-case text-neutral-500">{aside}</span>}
+    </p>
+  )
+}
+
 export function FilterBar({ filters, onChange, totalVisible, totalAll, loading }: Props) {
   const hasAny =
-    filters.regions.length > 0 ||
-    filters.cuisines.length > 0 ||
-    filters.vibes.length > 0 ||
-    filters.minRating > 0
+    filters.regions.length > 0   ||
+    filters.cuisines.length > 0  ||
+    filters.vibes.length > 0     ||
+    filters.prices.length > 0    ||
+    filters.minRating > 0        ||
+    filters.openNow
 
   function clearAll() {
-    onChange({ regions: [], cuisines: [], vibes: [], minRating: 0 })
+    onChange({
+      regions: [], cuisines: [], vibes: [], prices: [],
+      minRating: 0, openNow: false, sort: 'rating',
+    })
   }
 
   return (
     <div className="space-y-4 mb-6">
 
-      {/* Count row */}
+      {/* ── Count + clear ────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-2">
-          <span className="font-['Bebas_Neue'] text-[28px] leading-none tracking-wider text-neutral-900 dark:text-white">
+          <span className="font-['Bebas_Neue'] text-[28px] leading-none tracking-wider
+                           text-neutral-900 dark:text-white">
             {loading ? '—' : totalVisible}
           </span>
           <span className="text-[11px] uppercase tracking-[0.1em] text-neutral-400">
             {loading ? 'loading...' : `of ${totalAll} places`}
           </span>
         </div>
-        {hasAny && (
+        <div className="flex items-center gap-3">
+          {/* ── Open Now toggle ─────────────────────────────── */}
           <button
-            onClick={clearAll}
-            className="text-[11px] text-neutral-400 hover:text-neutral-700
-                       dark:hover:text-neutral-200 underline underline-offset-4 transition-colors uppercase tracking-wider"
+            onClick={() => onChange({ ...filters, openNow: !filters.openNow })}
+            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-sm text-[11px]
+              font-medium border transition-all duration-150 uppercase tracking-[0.07em]
+              ${filters.openNow
+                ? 'bg-emerald-500 border-emerald-500 text-white'
+                : 'border-neutral-200 dark:border-neutral-700 text-neutral-500 hover:border-emerald-400 hover:text-emerald-600'
+              }`}
           >
-            Clear all
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              filters.openNow ? 'bg-white animate-pulse' : 'bg-neutral-300 dark:bg-neutral-600'
+            }`} />
+            Open Now
           </button>
-        )}
+
+          {hasAny && (
+            <button
+              onClick={clearAll}
+              className="text-[11px] text-neutral-400 hover:text-neutral-700
+                         dark:hover:text-neutral-200 underline underline-offset-4
+                         transition-colors uppercase tracking-wider"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Neighbourhood — triggers live Google fetch */}
+      {/* ── Sort ─────────────────────────────────────────────── */}
       <div>
-        <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-400 dark:text-neutral-500 font-medium mb-2">
+        <Label>Sort by</Label>
+        <div className="flex flex-wrap gap-2">
+          {SORTS.map(s => (
+            <button
+              key={s.value}
+              onClick={() => onChange({ ...filters, sort: s.value })}
+              className={`px-3 py-1.5 rounded-sm text-[11px] uppercase tracking-[0.07em]
+                font-medium border transition-all duration-150
+                ${filters.sort === s.value
+                  ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 border-neutral-900 dark:border-white'
+                  : 'bg-transparent text-neutral-500 border-neutral-200 dark:border-neutral-700 hover:border-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
+                }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Neighbourhood ────────────────────────────────────── */}
+      <div>
+        <Label aside={
+          filters.regions.length > 0
+            ? `· ${filters.regions.length} selected · live Google data`
+            : undefined
+        }>
           Neighbourhood
-          {filters.regions.length > 0 && (
-            <span className="ml-2 normal-case text-neutral-500">· {filters.regions.length} selected · live Google data</span>
-          )}
-        </p>
+        </Label>
         <div className="flex flex-wrap gap-2">
           {REGIONS.map(r => (
             <Pill
               key={r.key}
               label={r.label}
               active={filters.regions.includes(r.key)}
-              onClick={() => onChange({ ...filters, regions: toggle(filters.regions, r.key) })}
+              onClick={() => onChange({ ...filters, regions: toggleArr(filters.regions, r.key) })}
             />
           ))}
         </div>
       </div>
 
-      {/* Craving */}
+      {/* ── Craving ──────────────────────────────────────────── */}
       <div>
-        <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-400 dark:text-neutral-500 font-medium mb-2">
+        <Label aside={filters.cuisines.length > 0 ? `· ${filters.cuisines.length} selected` : undefined}>
           Craving
-          {filters.cuisines.length > 0 && (
-            <span className="ml-2 normal-case text-neutral-500">· {filters.cuisines.length} selected</span>
-          )}
-        </p>
+        </Label>
         <div className="flex flex-wrap gap-2">
           {CUISINES.map(c => (
             <Pill
@@ -149,20 +216,17 @@ export function FilterBar({ filters, onChange, totalVisible, totalAll, loading }
               label={c.label}
               active={filters.cuisines.includes(c.key)}
               accent="#D85A30"
-              onClick={() => onChange({ ...filters, cuisines: toggle(filters.cuisines, c.key) })}
+              onClick={() => onChange({ ...filters, cuisines: toggleArr(filters.cuisines, c.key) })}
             />
           ))}
         </div>
       </div>
 
-      {/* Vibe */}
+      {/* ── Vibe ─────────────────────────────────────────────── */}
       <div>
-        <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-400 dark:text-neutral-500 font-medium mb-2">
+        <Label aside={filters.vibes.length > 0 ? `· ${filters.vibes.length} selected` : undefined}>
           Vibe
-          {filters.vibes.length > 0 && (
-            <span className="ml-2 normal-case text-neutral-500">· {filters.vibes.length} selected</span>
-          )}
-        </p>
+        </Label>
         <div className="flex flex-wrap gap-2">
           {VIBES.map(v => (
             <Pill
@@ -170,17 +234,38 @@ export function FilterBar({ filters, onChange, totalVisible, totalAll, loading }
               label={v.label}
               active={filters.vibes.includes(v.key)}
               accent="#7F77DD"
-              onClick={() => onChange({ ...filters, vibes: toggle(filters.vibes, v.key) })}
+              onClick={() => onChange({ ...filters, vibes: toggleArr(filters.vibes, v.key) })}
             />
           ))}
         </div>
       </div>
 
-      {/* Rating */}
+      {/* ── Price ────────────────────────────────────────────── */}
       <div>
-        <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-400 dark:text-neutral-500 font-medium mb-2">
-          Minimum rating
-        </p>
+        <Label aside={filters.prices.length > 0 ? `· ${filters.prices.length} selected` : undefined}>
+          Price
+        </Label>
+        <div className="flex flex-wrap gap-2">
+          {PRICES.map(p => (
+            <button
+              key={p.value}
+              onClick={() => onChange({ ...filters, prices: toggleArr(filters.prices, p.value) })}
+              className={`px-4 py-1.5 rounded-sm text-[13px] font-medium border
+                transition-all duration-150
+                ${filters.prices.includes(p.value)
+                  ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 border-neutral-900 dark:border-white'
+                  : 'bg-transparent text-neutral-500 border-neutral-200 dark:border-neutral-700 hover:border-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
+                }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Min Rating ───────────────────────────────────────── */}
+      <div>
+        <Label>Minimum rating</Label>
         <div className="flex flex-wrap gap-2">
           {RATINGS.map(r => (
             <button
@@ -199,10 +284,23 @@ export function FilterBar({ filters, onChange, totalVisible, totalAll, loading }
         </div>
       </div>
 
-      {/* Active chips summary */}
+      {/* ── Active chips summary ──────────────────────────────── */}
       {hasAny && (
         <div className="flex flex-wrap gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-800">
-          <span className="text-[10px] uppercase tracking-wider text-neutral-400 self-center mr-1">Active:</span>
+          <span className="text-[10px] uppercase tracking-wider text-neutral-400 self-center mr-1">
+            Active:
+          </span>
+
+          {filters.openNow && (
+            <button
+              onClick={() => onChange({ ...filters, openNow: false })}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px]
+                         bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400
+                         hover:bg-emerald-100 transition-colors">
+              🟢 Open Now ×
+            </button>
+          )}
+
           {filters.regions.map(r => (
             <button key={r}
               onClick={() => onChange({ ...filters, regions: filters.regions.filter(x => x !== r) })}
@@ -212,6 +310,7 @@ export function FilterBar({ filters, onChange, totalVisible, totalAll, loading }
               {REGIONS.find(x => x.key === r)?.label} ×
             </button>
           ))}
+
           {filters.cuisines.map(c => (
             <button key={c}
               onClick={() => onChange({ ...filters, cuisines: filters.cuisines.filter(x => x !== c) })}
@@ -221,6 +320,7 @@ export function FilterBar({ filters, onChange, totalVisible, totalAll, loading }
               {CUISINES.find(x => x.key === c)?.label} ×
             </button>
           ))}
+
           {filters.vibes.map(v => (
             <button key={v}
               onClick={() => onChange({ ...filters, vibes: filters.vibes.filter(x => x !== v) })}
@@ -230,6 +330,17 @@ export function FilterBar({ filters, onChange, totalVisible, totalAll, loading }
               {VIBES.find(x => x.key === v)?.label} ×
             </button>
           ))}
+
+          {filters.prices.map(p => (
+            <button key={p}
+              onClick={() => onChange({ ...filters, prices: filters.prices.filter(x => x !== p) })}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px]
+                         bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300
+                         hover:bg-neutral-200 transition-colors">
+              {PRICES.find(x => x.value === p)?.label} ×
+            </button>
+          ))}
+
           {filters.minRating > 0 && (
             <button
               onClick={() => onChange({ ...filters, minRating: 0 })}

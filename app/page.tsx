@@ -8,15 +8,19 @@ import { PLACES } from '@/lib/places'
 import type { ActiveFilters, Place } from '@/lib/types'
 
 const EMPTY: ActiveFilters = {
-  regions: [],
-  cuisines: [],
-  vibes: [],
+  regions:   [],
+  cuisines:  [],
+  vibes:     [],
+  prices:    [],
   minRating: 0,
+  openNow:   false,
+  sort:      'rating',
 }
 
 function SkeletonCard() {
   return (
-    <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 overflow-hidden animate-pulse">
+    <div className="rounded-lg border border-neutral-200 dark:border-neutral-800
+                    overflow-hidden animate-pulse">
       <div className="h-44 bg-neutral-100 dark:bg-neutral-800" />
       <div className="p-4 space-y-2">
         <div className="h-6 w-2/3 bg-neutral-100 dark:bg-neutral-800 rounded" />
@@ -29,85 +33,72 @@ function SkeletonCard() {
 }
 
 const PRICE_MAP: Record<string, number> = {
-  PRICE_LEVEL_FREE:          1,
-  PRICE_LEVEL_INEXPENSIVE:   1,
-  PRICE_LEVEL_MODERATE:      2,
-  PRICE_LEVEL_EXPENSIVE:     3,
-  PRICE_LEVEL_VERY_EXPENSIVE:4,
+  PRICE_LEVEL_FREE:           1,
+  PRICE_LEVEL_INEXPENSIVE:    1,
+  PRICE_LEVEL_MODERATE:       2,
+  PRICE_LEVEL_EXPENSIVE:      3,
+  PRICE_LEVEL_VERY_EXPENSIVE: 4,
 }
 
 function guessCuisine(primaryType: string): string[] {
   const t = primaryType.toLowerCase()
   const c: string[] = []
-  if (t.includes('cafe') || t.includes('coffee') || t.includes('bakery')) c.push('cafe')
+  if (t.includes('cafe') || t.includes('coffee') || t.includes('bakery'))                          c.push('cafe')
   if (t.includes('indian') || t.includes('north indian') || t.includes('south indian') || t.includes('punjabi')) c.push('indian')
   if (t.includes('chinese') || t.includes('asian') || t.includes('tibetan') || t.includes('japanese') || t.includes('thai')) c.push('asian')
   if (t.includes('italian') || t.includes('continental') || t.includes('western') || t.includes('pizza')) c.push('continental')
   if (t.includes('street') || t.includes('fast food') || t.includes('snack') || t.includes('chaat')) c.push('street')
-  if (t.includes('fusion')) c.push('fusion')
+  if (t.includes('fusion'))                                                                          c.push('fusion')
   return c.length > 0 ? c : ['indian']
 }
 
-// Convert a raw Google Places API response object → our Place shape
 function normaliseGooglePlace(item: any, region: string, idx: number): Place {
-  // Already a curated Place — recognise by presence of keywords array
-  if (Array.isArray(item.keywords)) return item as Place
+  if (Array.isArray(item.keywords)) return item as Place   // already curated
 
-  const primaryType = item.primaryTypeDisplayName?.text ?? 'Restaurant'
-  const priceLevel  = PRICE_MAP[item.priceLevel] ?? 0
-  const rating      = item.rating ?? 0
-  const ratingCount = item.userRatingCount ?? 0
-
-  // Today's hours: Google gives an array like ["Monday: 9:00 AM – 11:00 PM", ...]
-  const weekdays      = item.regularOpeningHours?.weekdayDescriptions ?? []
-  const todayIdx      = new Date().getDay() // 0=Sun, but Google starts Mon=0
-  const googleTodayIdx = todayIdx === 0 ? 6 : todayIdx - 1
-  const hoursToday    = weekdays[googleTodayIdx] ?? ''
-
-  // isOpenNow — Google returns this directly when you include the field
-  const isOpenNow: boolean | null =
-    item.regularOpeningHours?.openNow ?? null
-
-  // Photo — store the raw name; PlaceCard builds /api/photo?name=... from it
-  const photoName: string | undefined = item.photos?.[0]?.name
+  const primaryType  = item.primaryTypeDisplayName?.text ?? 'Restaurant'
+  const priceLevel   = PRICE_MAP[item.priceLevel] ?? 0
+  const weekdays     = item.regularOpeningHours?.weekdayDescriptions ?? []
+  const todayIdx     = new Date().getDay()
+  const googleDay    = todayIdx === 0 ? 6 : todayIdx - 1
+  const hoursRaw     = weekdays[googleDay] ?? ''
 
   return {
-    id:           item.id ?? `google-${idx}`,
-    name:         item.displayName?.text ?? 'Unknown',
+    id:            item.id ?? `google-${idx}`,
+    name:          item.displayName?.text ?? 'Unknown',
     region,
     neighbourhood: region,
-    cuisine:      guessCuisine(primaryType),
-    vibe:         ['casual'],
-    price:        priceLevel,
+    cuisine:       guessCuisine(primaryType),
+    vibe:          ['casual'],
+    type:          primaryType,
+    price:         priceLevel,
     priceLevel,
-    rating,
-    ratingCount,
-    location:     item.formattedAddress ?? region,
-    address:      item.formattedAddress ?? '',
-    type:         primaryType,
-    intro:        item.editorialSummary?.text ?? '',
-    summary:      item.editorialSummary?.text ?? '',
-    famous:       '',
-    tip:          '',
-    hours:        weekdays.join(' | '),
-    hoursToday:   hoursToday.includes(':') ? hoursToday.split(': ')[1] ?? hoursToday : hoursToday,
-    isOpenNow,
-    lat:          item.location?.latitude  ?? 28.6139,
-    lng:          item.location?.longitude ?? 77.2090,
-    photoName,
+    rating:        item.rating ?? 0,
+    ratingCount:   item.userRatingCount ?? 0,
+    location:      item.formattedAddress ?? region,
+    address:       item.formattedAddress ?? '',
+    lat:           item.location?.latitude  ?? 28.6139,
+    lng:           item.location?.longitude ?? 77.2090,
+    intro:         item.editorialSummary?.text ?? '',
+    summary:       item.editorialSummary?.text ?? '',
+    famous:        '',
+    tip:           '',
+    keywords:      [primaryType.toLowerCase()],
+    hours:         weekdays.join(' | '),
+    hoursToday:    hoursRaw.includes(': ') ? hoursRaw.split(': ')[1] ?? hoursRaw : hoursRaw,
+    isOpenNow:     item.regularOpeningHours?.openNow ?? null,
+    photoName:     item.photos?.[0]?.name,
     googleMapsUri: `https://www.google.com/maps/place/?q=place_id:${item.id}`,
-    keywords:     [primaryType.toLowerCase()],
-    mustTry:      false,
+    mustTry:       false,
   } satisfies Place
 }
 
 export default function Home() {
-  const [filters, setFilters]   = useState<ActiveFilters>(EMPTY)
-  const [query,   setQuery]     = useState('')
+  const [filters, setFilters]         = useState<ActiveFilters>(EMPTY)
+  const [query,   setQuery]           = useState('')
   const [googleCache, setGoogleCache] = useState<Record<string, Place[]>>({})
-  const [loading, setLoading]   = useState(false)
-  const [error,   setError]     = useState<string | null>(null)
-  const fetchingRef             = useRef<Set<string>>(new Set())
+  const [loading, setLoading]         = useState(false)
+  const [error,   setError]           = useState<string | null>(null)
+  const fetchingRef                   = useRef<Set<string>>(new Set())
 
   const fetchRegion = useCallback(async (region: string) => {
     if (fetchingRef.current.has(region)) return
@@ -126,7 +117,6 @@ export default function Home() {
     }
   }, [])
 
-  // Fetch missing regions whenever region selection changes
   useEffect(() => {
     const regions = filters.regions.length > 0 ? filters.regions : ['all']
     const missing = regions.filter(r => !googleCache[r])
@@ -136,11 +126,10 @@ export default function Home() {
     Promise.all(missing.map(r => fetchRegion(r))).finally(() => setLoading(false))
   }, [filters.regions, fetchRegion, googleCache])
 
-  // Build pool from cached Google data (or curated fallback)
   const sourcePool = useMemo<Place[]>(() => {
     const regions = filters.regions.length > 0 ? filters.regions : ['all']
     const seen    = new Set<string>()
-    const all:  Place[] = []
+    const all: Place[] = []
     for (const r of regions) {
       for (const p of (googleCache[r] ?? [])) {
         if (!seen.has(p.id)) { seen.add(p.id); all.push(p) }
@@ -154,20 +143,60 @@ export default function Home() {
     return all
   }, [googleCache, filters.regions])
 
-  // Apply all filters + search
   const filtered = useMemo<Place[]>(() => {
     const q = query.toLowerCase().trim()
-    return sourcePool.filter(p => {
-      const cuisineOk = filters.cuisines.length === 0 || filters.cuisines.some(c => p.cuisine.includes(c))
-      const vibeOk    = filters.vibes.length    === 0 || filters.vibes.some(v => p.vibe.includes(v))
-      const ratingOk  = filters.minRating === 0 || p.rating >= filters.minRating
-      const searchOk  = !q || [
+
+    // ── Filter ────────────────────────────────────────────────────────────
+    let result = sourcePool.filter(p => {
+      const cuisineOk = filters.cuisines.length === 0 ||
+        filters.cuisines.some(c => p.cuisine.includes(c))
+
+      const vibeOk = filters.vibes.length === 0 ||
+        filters.vibes.some(v => p.vibe.includes(v))
+
+      // Price filter — 0 means unknown, skip it if prices filter is active
+      const priceOk = filters.prices.length === 0 ||
+        (p.priceLevel > 0 && filters.prices.includes(p.priceLevel))
+
+      const ratingOk = filters.minRating === 0 || p.rating >= filters.minRating
+
+      // Open Now — only filter if the data is available (not null)
+      const openOk = !filters.openNow || p.isOpenNow === true
+
+      const searchOk = !q || [
         p.name, p.location, p.address, p.neighbourhood,
         p.intro, p.summary, p.famous, p.tip, p.type,
         ...p.cuisine, ...p.vibe, ...(p.keywords ?? []),
       ].some(f => f.toLowerCase().includes(q))
-      return cuisineOk && vibeOk && ratingOk && searchOk
+
+      return cuisineOk && vibeOk && priceOk && ratingOk && openOk && searchOk
     })
+
+    // ── Sort ──────────────────────────────────────────────────────────────
+    result = [...result].sort((a, b) => {
+      switch (filters.sort) {
+        case 'rating':
+          // Primary: rating desc. Tie-break: review count desc
+          return b.rating !== a.rating
+            ? b.rating - a.rating
+            : b.ratingCount - a.ratingCount
+        case 'reviews':
+          return b.ratingCount - a.ratingCount
+        case 'price_asc':
+          // Treat 0 (unknown) as highest so they sink to bottom
+          const pa = a.priceLevel || 99
+          const pb = b.priceLevel || 99
+          return pa - pb
+        case 'price_desc':
+          const pa2 = a.priceLevel || 0
+          const pb2 = b.priceLevel || 0
+          return pb2 - pa2
+        default:
+          return 0
+      }
+    })
+
+    return result
   }, [sourcePool, filters, query])
 
   const isLive = filters.regions.some(r => !!googleCache[r])
@@ -175,6 +204,7 @@ export default function Home() {
   return (
     <main className="max-w-6xl mx-auto px-5 py-12">
 
+      {/* Hero */}
       <div className="mb-8">
         <p className="text-[10px] uppercase tracking-[0.22em] text-neutral-400 mb-2">
           New Delhi · Live via Google Maps
@@ -185,7 +215,7 @@ export default function Home() {
           <span className="text-neutral-400 dark:text-neutral-500">hungry for?</span>
         </h1>
         <p className="text-sm text-neutral-400 font-light">
-          Select a neighbourhood · combine filters · hover cards for details
+          Select a neighbourhood · combine any filters · hover cards for details
         </p>
       </div>
 
@@ -201,7 +231,7 @@ export default function Home() {
         loading={loading}
       />
 
-      {/* Status */}
+      {/* Status bar */}
       <div className="flex items-center gap-3 mb-6 min-h-[20px]">
         {loading && (
           <div className="flex items-center gap-2">
@@ -227,6 +257,7 @@ export default function Home() {
 
       <div className="h-px bg-neutral-100 dark:bg-neutral-800 mb-6" />
 
+      {/* Grid */}
       {loading && sourcePool.length === 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 9 }).map((_, i) => <SkeletonCard key={i} />)}
