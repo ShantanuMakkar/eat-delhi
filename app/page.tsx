@@ -87,6 +87,7 @@ function normaliseGooglePlace(item: any, region: string, idx: number): Place {
     hoursToday:    hoursRaw.includes(': ') ? hoursRaw.split(': ')[1] ?? hoursRaw : hoursRaw,
     isOpenNow:     item.regularOpeningHours?.openNow ?? null,
     photoName:     item.photos?.[0]?.name,
+    photo:         item.photos?.[0]?.name ? undefined : 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80',
     googleMapsUri: `https://www.google.com/maps/place/?q=place_id:${item.id}`,
     mustTry:       false,
   } satisfies Place

@@ -108,7 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log(`[places] ${region}: ${circles.length} calls → ${merged.length} unique places`)
 
     // Cache on Vercel's CDN for 24h — same region fetched 1000x still = 3 Google calls/day
-    res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=3600')
+    res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=600')
     return res.status(200).json(merged)
   } catch (err) {
     console.error('[places] error:', err)
